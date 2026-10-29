@@ -48,6 +48,7 @@
   import { focusFirstElement, restoreFocus, trapModalKeydown } from '../a11y/modal-focus';
 
   const skeletonThemes = [
+    'amoled',
     'catppuccin',
     'cerberus',
     'concord',
@@ -94,7 +95,18 @@
     onServerDeleted: () => void;
   } = $props();
   type LibrarySortOrder = 'title' | 'author' | 'recent';
-  type LibraryViewMode = 'grid' | 'list';
+  type LibraryViewMode = 'series' | 'grid' | 'list';
+
+  interface SeriesGroup {
+    seriesId: number;
+    name: string;
+    author: string | null;
+    books: BookRecord[];
+    downloadedCount: number;
+    totalPages: number;
+    totalPagesRead: number;
+    isDownloading: boolean;
+  }
   const client = $derived(new KavitaClient(server.baseUrl, apiKey));
   const sharedCoverLoader = createSharedCoverLoader<string>(async (seriesId, signal) => {
     if (Capacitor.isNativePlatform()) {
@@ -114,7 +126,7 @@
   let authorFilter = $state('');
   let seriesFilter = $state('');
   let filtersVisible = $state(false);
-  let viewMode = $state<LibraryViewMode>('grid');
+  let viewMode = $state<LibraryViewMode>('series');
   let advancedFiltersActive = $derived(
     sortOrder !== 'title' || Boolean(authorFilter) || Boolean(seriesFilter),
   );
@@ -161,13 +173,74 @@
       if (sortOrder === 'author') {
         return (
           (a.author ?? '').localeCompare(b.author ?? '') ||
-          a.title.localeCompare(b.title) ||
+          a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }) ||
           a.id.localeCompare(b.id)
         );
       }
-      return a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
+      return (
+        a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }) ||
+        a.id.localeCompare(b.id)
+      );
     });
   });
+
+  let seriesGroups = $derived.by(() => {
+    const map = new Map<number, BookRecord[]>();
+    for (const book of visibleBooks) {
+      const list = map.get(book.seriesId) ?? [];
+      list.push(book);
+      map.set(book.seriesId, list);
+    }
+    const groups: SeriesGroup[] = [];
+    for (const [seriesId, items] of map.entries()) {
+      const sortedItems = [...items].sort((a, b) =>
+        a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }),
+      );
+      const name = items.find((b) => b.series)?.series || items[0]?.title || 'Unknown Series';
+      const author = items.find((b) => b.author)?.author || null;
+      const downloadedCount = items.filter((b) => Boolean(b.downloadPath)).length;
+      const totalPages = items.reduce((acc, b) => acc + (b.pages || 0), 0);
+      const totalPagesRead = items.reduce((acc, b) => acc + (b.pagesRead || 0), 0);
+      groups.push({
+        seriesId,
+        name,
+        author,
+        books: sortedItems,
+        downloadedCount,
+        totalPages,
+        totalPagesRead,
+        isDownloading: items.some((b) => downloadingBookId === b.id),
+      });
+    }
+
+    return groups.sort((a, b) => {
+      if (sortOrder === 'recent') {
+        const aRecent = Math.max(
+          ...a.books.map((b) => (b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0)),
+        );
+        const bRecent = Math.max(
+          ...b.books.map((b) => (b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0)),
+        );
+        return bRecent - aRecent || a.name.localeCompare(b.name, undefined, { numeric: true });
+      }
+      if (sortOrder === 'author') {
+        return (
+          (a.author ?? '').localeCompare(b.author ?? '') ||
+          a.name.localeCompare(b.name, undefined, { numeric: true })
+        );
+      }
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  });
+
+  let selectedSeriesId = $state<number | null>(null);
+  let activeSeries = $derived(
+    selectedSeriesId !== null
+      ? seriesGroups.find((g) => g.seriesId === selectedSeriesId) ?? null
+      : null,
+  );
+  let downloadingSeriesId = $state<number | null>(null);
+  let seriesDownloadProgress = $state<{ current: number; total: number } | null>(null);
   // Surface the most recently read, downloaded, in-progress book as a one-tap resume.
   let continueBook = $derived.by(() => {
     let latest: BookRecord | null = null;
@@ -253,7 +326,9 @@
   }
 
   function parseViewMode(value: string | null): LibraryViewMode {
-    return value === 'list' ? 'list' : 'grid';
+    if (value === 'list') return 'list';
+    if (value === 'grid') return 'grid';
+    return 'series';
   }
 
   function handleSortChange(event: Event): void {
@@ -274,6 +349,7 @@
 
   function handleViewModeChange(next: LibraryViewMode): void {
     viewMode = next;
+    selectedSeriesId = null;
     void setPreference('libraryView', next);
     scheduleVirtualWindow();
   }
@@ -341,6 +417,9 @@
     if (gridColumns !== nextColumns) gridColumns = nextColumns;
     if (rowHeight !== nextRowHeight) rowHeight = nextRowHeight;
 
+    const totalCount =
+      viewMode === 'series' && !selectedSeriesId ? seriesGroups.length : visibleBooks.length;
+
     const gridRect = virtualGrid.getBoundingClientRect();
     const scrollContainer = libraryMain?.closest<HTMLElement>('.app-stage');
     if (scrollContainer) {
@@ -348,7 +427,7 @@
       const listTop = gridRect.top - containerRect.top + scrollContainer.scrollTop;
       virtualWindow = preserveFocusedRow(
         calculateVirtualWindow(
-          visibleBooks.length,
+          totalCount,
           nextColumns,
           nextRowHeight,
           scrollContainer.scrollTop - listTop,
@@ -361,7 +440,7 @@
     if (typeof window === 'undefined') return;
     virtualWindow = preserveFocusedRow(
       calculateVirtualWindow(
-        visibleBooks.length,
+        totalCount,
         nextColumns,
         nextRowHeight,
         -gridRect.top,
@@ -381,21 +460,27 @@
     const focusedRow = Math.floor(bookIndex / gridColumns);
     const firstRow = Math.min(next.firstRow, focusedRow);
     const lastRow = Math.max(next.lastRow, focusedRow);
+    const totalCount =
+      viewMode === 'series' && !selectedSeriesId ? seriesGroups.length : visibleBooks.length;
     return {
       ...next,
       firstRow,
       lastRow,
       startIndex: firstRow * gridColumns,
-      endIndex: Math.min(visibleBooks.length, (lastRow + 1) * gridColumns),
+      endIndex: Math.min(totalCount, (lastRow + 1) * gridColumns),
     };
   }
 
   $effect(() => {
-    if (visibleBooks.length > 0) scheduleVirtualWindow();
+    if (visibleBooks.length > 0 || seriesGroups.length > 0) scheduleVirtualWindow();
   });
 
   $effect(() => {
-    if (viewMode === 'grid' || viewMode === 'list') scheduleVirtualWindow();
+    if (viewMode === 'grid' || viewMode === 'list' || viewMode === 'series') scheduleVirtualWindow();
+  });
+
+  $effect(() => {
+    if (selectedSeriesId === null) scheduleVirtualWindow();
   });
 
   $effect(() => {
@@ -483,6 +568,7 @@
             if (readerBackHandler || document.querySelector('[data-reader-panel]')) return;
             reading = null;
           } else if (settingsVisible) closeSettings();
+          else if (selectedSeriesId !== null) selectedSeriesId = null;
           else void App.exitApp();
         }),
       ),
@@ -654,12 +740,14 @@
     coverLoadController = controller;
     const priority: BookRecord[] = [];
     if (continueBook) priority.push(continueBook);
+    const totalCount =
+      viewMode === 'series' && !selectedSeriesId ? seriesGroups.length : visibleBooks.length;
     const firstVisibleIndex =
       virtualWindow.endIndex > virtualWindow.startIndex ? virtualWindow.startIndex : 0;
     const visibleEndIndex =
       virtualWindow.endIndex > virtualWindow.startIndex
         ? virtualWindow.endIndex
-        : Math.min(visibleBooks.length, gridColumns * 3);
+        : Math.min(totalCount, gridColumns * 3);
     priority.push(...visibleBooks.slice(firstVisibleIndex, visibleEndIndex));
     const ordered = [...priority, ...items];
     const prioritizedItems: CoverLoadItem[] = [];
@@ -749,6 +837,46 @@
         : item,
     );
     return true;
+  }
+
+  async function downloadEntireSeries(group: SeriesGroup): Promise<void> {
+    if (downloadingSeriesId !== null || downloadingBookId !== null) return;
+    downloadingSeriesId = group.seriesId;
+    const toDownload = group.books.filter((b) => !b.downloadPath);
+    if (toDownload.length === 0) {
+      downloadingSeriesId = null;
+      return;
+    }
+
+    seriesDownloadProgress = { current: 0, total: toDownload.length };
+    let failed = 0;
+
+    for (let i = 0; i < toDownload.length; i++) {
+      const book = toDownload[i];
+      if (!book) continue;
+      seriesDownloadProgress = { current: i + 1, total: toDownload.length };
+      message = `Downloading ${group.name} (${i + 1}/${toDownload.length}): ${book.title}...`;
+      const result = await download(book);
+      if (!result) {
+        failed++;
+      }
+    }
+
+    downloadingSeriesId = null;
+    seriesDownloadProgress = null;
+    if (failed === 0) {
+      message = `Successfully downloaded all ${toDownload.length} books in ${group.name}.`;
+    } else {
+      message = `Downloaded ${toDownload.length - failed} of ${toDownload.length} books for ${group.name}. Some downloads failed.`;
+    }
+  }
+
+  async function removeEntireSeries(group: SeriesGroup): Promise<void> {
+    const downloaded = group.books.filter((b) => Boolean(b.downloadPath));
+    for (const book of downloaded) {
+      await remove(book);
+    }
+    message = `Removed ${downloaded.length} downloaded books from ${group.name}.`;
   }
 
   async function open(book: BookRecord, options: { preferFurthest?: boolean } = {}): Promise<void> {
@@ -1391,8 +1519,26 @@
       <div
         class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-surface-700-300"
       >
-        <p>{visibleBooks.length} of {books.length} books</p>
+        <p>
+          {#if viewMode === 'series' && activeSeries}
+            {activeSeries.name} &bull; {activeSeries.books.length} volumes
+          {:else if viewMode === 'series'}
+            {seriesGroups.length} series ({visibleBooks.length} books)
+          {:else}
+            {visibleBooks.length} of {books.length} books
+          {/if}
+        </p>
         <div class="flex items-center gap-1" role="group" aria-label="Library view">
+          <button
+            class="btn btn-sm h-10 {viewMode === 'series'
+              ? 'preset-filled-primary-700-300'
+              : 'preset-tonal-surface'}"
+            type="button"
+            aria-pressed={viewMode === 'series'}
+            onclick={() => handleViewModeChange('series')}
+          >
+            Series
+          </button>
           <button
             class="btn btn-sm h-10 {viewMode === 'grid'
               ? 'preset-filled-primary-700-300'
@@ -1490,22 +1636,154 @@
         </svg>
         <p>No books match your search.</p>
       </div>
-    {:else}
-      <section
-        bind:this={virtualGrid}
-        class="relative mt-8"
-        style={`height: ${Math.max(0, virtualWindow.totalHeight - GRID_ROW_GAP_PX)}px`}
-        aria-label="Books"
-      >
-        {#each Array.from( { length: virtualWindow.lastRow - virtualWindow.firstRow + 1 } ) as _, rowOffset (rowOffset)}
-          {@const rowIndex = virtualWindow.firstRow + rowOffset}
-          {@const rowStart = rowIndex * gridColumns}
-          {@const rowEnd = Math.min(visibleBooks.length, rowStart + gridColumns)}
-          <div
-            class="absolute inset-x-0 grid gap-x-4"
-            style={`height: ${rowHeight}px; top: ${rowIndex * rowHeight}px; grid-template-columns: repeat(${gridColumns}, minmax(0, 1fr));`}
+    {:else if viewMode === 'series' && activeSeries}
+      <!-- Series Detail View -->
+      <div class="mt-6 flex flex-col gap-6" transition:fade>
+        <!-- Back Button -->
+        <div>
+          <button
+            class="btn btn-sm preset-tonal-surface flex items-center gap-2"
+            type="button"
+            onclick={() => (selectedSeriesId = null)}
           >
-            {#each visibleBooks.slice(rowStart, rowEnd) as book (book.id)}
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+              <path fill="currentColor" d="m14 18-6-6 6-6 1.4 1.4-4.6 4.6 4.6 4.6Z" />
+            </svg>
+            <span>Back to Series</span>
+          </button>
+        </div>
+
+        <!-- Series Banner -->
+        <div
+          class="card preset-filled-surface-100-900 border border-surface-200-800 rounded-xl p-4 sm:p-6 shadow-md"
+        >
+          <div class="flex flex-col sm:flex-row gap-6 items-start">
+            <!-- Cover -->
+            <div
+              class="relative w-32 sm:w-40 shrink-0 aspect-[2/3] overflow-hidden rounded-lg shadow-lg preset-tonal-surface"
+            >
+              {#if covers[activeSeries.seriesId]}
+                <img
+                  class="h-full w-full object-cover"
+                  src={covers[activeSeries.seriesId]}
+                  alt={activeSeries.name}
+                />
+              {/if}
+            </div>
+
+            <!-- Info & Actions -->
+            <div class="flex flex-col flex-1 min-w-0">
+              <h1 class="font-serif text-2xl sm:text-3xl font-bold text-surface-950-50 leading-tight">
+                {activeSeries.name}
+              </h1>
+              {#if activeSeries.author}
+                <p class="mt-1 text-base text-surface-700-300">
+                  {activeSeries.author}
+                </p>
+              {/if}
+
+              <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-surface-700-300">
+                <span class="badge preset-tonal-surface">
+                  {activeSeries.books.length} {activeSeries.books.length === 1 ? 'Volume' : 'Volumes'}
+                </span>
+                <span
+                  class="badge {activeSeries.downloadedCount === activeSeries.books.length
+                    ? 'preset-filled-primary-600-400'
+                    : 'preset-tonal-surface'}"
+                >
+                  {activeSeries.downloadedCount} of {activeSeries.books.length} Downloaded
+                </span>
+              </div>
+
+              <!-- Series Overall Reading Progress -->
+              {#if activeSeries.totalPages > 0 && activeSeries.totalPagesRead > 0}
+                {@const pct = Math.min(
+                  100,
+                  Math.round((activeSeries.totalPagesRead / activeSeries.totalPages) * 100),
+                )}
+                <div class="mt-4 max-w-md">
+                  <div class="flex justify-between text-xs text-surface-700-300 mb-1">
+                    <span>Series Progress</span>
+                    <span>{pct}% ({activeSeries.totalPagesRead} / {activeSeries.totalPages} pages)</span>
+                  </div>
+                  <div class="h-2 w-full overflow-hidden rounded-full bg-surface-300-700">
+                    <div class="h-full preset-filled-primary-600-400" style:width={`${pct}%`}></div>
+                  </div>
+                </div>
+              {/if}
+
+              <!-- Download Entire Series Button & Actions -->
+              <div class="mt-6 flex flex-wrap items-center gap-3">
+                {#if activeSeries.downloadedCount === activeSeries.books.length}
+                  <button
+                    class="btn preset-filled-primary-700-300 flex items-center gap-2"
+                    type="button"
+                    disabled
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5">
+                      <path
+                        fill="currentColor"
+                        d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4Z"
+                      />
+                    </svg>
+                    <span>All Volumes Downloaded</span>
+                  </button>
+                {:else}
+                  <button
+                    class="btn preset-filled-primary-700-300 flex items-center gap-2"
+                    type="button"
+                    onclick={() => void downloadEntireSeries(activeSeries)}
+                    disabled={downloadingSeriesId !== null || downloadingBookId !== null}
+                  >
+                    {#if downloadingSeriesId === activeSeries.seriesId}
+                      <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5 animate-spin">
+                        <path
+                          fill="currentColor"
+                          d="M12 4V2a10 10 0 0 0-7.07 17.07l1.42-1.42A8 8 0 1 1 12 4Z"
+                        />
+                      </svg>
+                      <span>
+                        {seriesDownloadProgress
+                          ? `Downloading (${seriesDownloadProgress.current}/${seriesDownloadProgress.total})...`
+                          : 'Downloading...'}
+                      </span>
+                    {:else}
+                      <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5">
+                        <path fill="currentColor" d="M12 16l4-4h-3V4h-2v8H8l4 4zm9 4H3v-2h18v2z" />
+                      </svg>
+                      <span>
+                        Download Entire Series ({activeSeries.books.length - activeSeries.downloadedCount} remaining)
+                      </span>
+                    {/if}
+                  </button>
+                {/if}
+
+                {#if activeSeries.downloadedCount > 0}
+                  <button
+                    class="btn preset-tonal-error flex items-center gap-2"
+                    type="button"
+                    onclick={() => void removeEntireSeries(activeSeries)}
+                    disabled={downloadingSeriesId !== null}
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                      <path
+                        fill="currentColor"
+                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                      />
+                    </svg>
+                    <span>Remove Series Downloads</span>
+                  </button>
+                {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Volumes Grid -->
+        <div>
+          <h2 class="font-serif text-xl font-bold text-surface-950-50 mb-4">Volumes</h2>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {#each activeSeries.books as book (book.id)}
               <article
                 class="relative text-left"
                 data-book-id={book.id}
@@ -1514,75 +1792,95 @@
                   openMenu(book);
                 }}
               >
-                {#if viewMode === 'list'}
+                <div class="group block w-full text-left">
                   <div class="relative">
                     <button
-                      class="group block w-full text-left"
+                      class="block w-full text-left"
                       type="button"
                       onclick={() => void open(book)}
+                      aria-label={`Open ${book.title}`}
                       disabled={downloadingBookId === book.id}
                     >
                       <div
-                        class="preset-tonal-surface relative flex min-h-24 items-center gap-4 rounded-lg p-3 pr-16 text-left shadow-md transition-shadow duration-300 group-hover:shadow-xl"
+                        class="preset-tonal-surface relative aspect-[2/3] overflow-hidden rounded-lg shadow-md transition-shadow duration-300 group-hover:shadow-xl"
                       >
-                        <div class="relative h-20 w-14 shrink-0 overflow-hidden rounded-md">
-                          {#if covers[book.seriesId]}
-                            <img
-                              class="h-full w-full object-cover"
-                              src={covers[book.seriesId]}
-                              loading="lazy"
-                              decoding="async"
-                              alt=""
-                            />
-                          {/if}
-                          {#if book.remoteAvailable === false && book.downloadPath}
-                            <span
-                              class="badge-icon preset-filled-warning-500 absolute left-1 top-1 h-6 w-6 p-0"
-                              title="Saved offline; no longer available on Kavita"
-                              aria-label="Saved offline; no longer available on Kavita"
-                            >
-                              <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
-                                <path
-                                  fill="currentColor"
-                                  d="M12 2 1 21h22L12 2Zm0 4.2L19.5 19h-15L12 6.2ZM11 10v4h2v-4h-2Zm0 5v2h2v-2h-2Z"
-                                />
-                              </svg>
-                            </span>
-                          {/if}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                          <h2
-                            class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50"
+                        {#if covers[book.seriesId]}
+                          <img
+                            class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                            src={covers[book.seriesId]}
+                            loading="lazy"
+                            decoding="async"
+                            alt=""
+                          />
+                        {/if}
+                        {#if book.downloadPath}
+                          <span
+                            class="badge-icon preset-filled-primary-600-400 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
+                            title="Downloaded"
+                            aria-label="Downloaded"
                           >
-                            {book.title}
-                          </h2>
-                          <p class="mt-1 truncate text-sm text-surface-700-300">
-                            {book.author ?? 'Unknown author'}
-                          </p>
-                          {#if book.series}
-                            <p class="mt-1 truncate text-xs text-surface-700-300">{book.series}</p>
-                          {/if}
-                          {#if progressOf(book) > 0}
-                            <div
-                              class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-300-700"
-                              role="progressbar"
-                              aria-label={`Reading progress for ${book.title}`}
-                              aria-valuemin="0"
-                              aria-valuemax="100"
-                              aria-valuenow={Math.round(progressOf(book))}
-                              aria-valuetext={`${Math.round(progressOf(book))}% complete`}
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                              <path
+                                fill="currentColor"
+                                d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4Z"
+                              />
+                            </svg>
+                          </span>
+                        {/if}
+                        {#if downloadingBookId === book.id}
+                          <span
+                            class="badge-icon preset-filled-primary-600-400 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
+                            title="Downloading"
+                            aria-label="Downloading"
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 24 24"
+                              class="h-4 w-4 animate-spin"
                             >
-                              <div
-                                class="h-full preset-filled-primary-600-400"
-                                style:width={`${progressOf(book)}%`}
-                              ></div>
-                            </div>
-                          {/if}
-                        </div>
+                              <path
+                                fill="currentColor"
+                                d="M12 4V2a10 10 0 0 0-7.07 17.07l1.42-1.42A8 8 0 1 1 12 4Z"
+                              />
+                            </svg>
+                          </span>
+                        {/if}
+                        {#if progressOf(book) > 0}
+                          <div
+                            class="absolute inset-x-0 bottom-0 h-2"
+                            role="progressbar"
+                            aria-label={`Reading progress for ${book.title}`}
+                            aria-valuenow={Math.round(progressOf(book))}
+                          >
+                            <div
+                              class="h-full preset-filled-primary-600-400"
+                              style:width={`${progressOf(book)}%`}
+                            ></div>
+                          </div>
+                        {/if}
                       </div>
                     </button>
+                    {#if !book.downloadPath && downloadingBookId !== book.id}
+                      <button
+                        class="btn btn-sm preset-tonal-surface absolute left-2 top-2 z-10 h-8 w-8 !p-0 shadow-md hover:preset-filled-primary-600-400"
+                        type="button"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          void download(book);
+                        }}
+                        title="Download volume"
+                        aria-label={`Download ${book.title}`}
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                          <path
+                            fill="currentColor"
+                            d="M12 16l4-4h-3V4h-2v8H8l4 4zm9 4H3v-2h18v2z"
+                          />
+                        </svg>
+                      </button>
+                    {/if}
                     <button
-                      class="btn btn-sm preset-tonal-tertiary absolute right-3 top-3 z-10 h-11 w-11 !p-0 shadow-md"
+                      class="btn btn-sm preset-tonal-tertiary absolute right-3 bottom-3 z-10 h-11 w-11 !p-0 shadow-md"
                       type="button"
                       onclick={() => openMenu(book)}
                       aria-label={`Book actions for ${book.title}`}
@@ -1596,47 +1894,92 @@
                       </svg>
                     </button>
                   </div>
-                {:else}
+                  <button
+                    class="mt-3 block w-full text-left"
+                    type="button"
+                    onclick={() => void open(book)}
+                    disabled={downloadingBookId === book.id}
+                  >
+                    <h3
+                      class="line-clamp-2 font-serif text-sm font-medium leading-snug text-surface-950-50"
+                    >
+                      {book.title}
+                    </h3>
+                  </button>
+                </div>
+              </article>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {:else}
+      <section
+        bind:this={virtualGrid}
+        class="relative mt-8"
+        style={`height: ${Math.max(0, virtualWindow.totalHeight - GRID_ROW_GAP_PX)}px`}
+        aria-label={viewMode === 'series' ? 'Series' : 'Books'}
+      >
+        {#each Array.from( { length: virtualWindow.lastRow - virtualWindow.firstRow + 1 } ) as _, rowOffset (rowOffset)}
+          {@const rowIndex = virtualWindow.firstRow + rowOffset}
+          {@const rowStart = rowIndex * gridColumns}
+          {#if viewMode === 'series'}
+            {@const rowEnd = Math.min(seriesGroups.length, rowStart + gridColumns)}
+            <div
+              class="absolute inset-x-0 grid gap-x-4"
+              style={`height: ${rowHeight}px; top: ${rowIndex * rowHeight}px; grid-template-columns: repeat(${gridColumns}, minmax(0, 1fr));`}
+            >
+              {#each seriesGroups.slice(rowStart, rowEnd) as group (group.seriesId)}
+                <article class="relative text-left" data-series-id={group.seriesId}>
                   <div class="group block w-full text-left">
                     <div class="relative">
                       <button
                         class="block w-full text-left"
                         type="button"
-                        onclick={() => void open(book)}
-                        aria-label={`Open ${book.title}`}
-                        disabled={downloadingBookId === book.id}
+                        onclick={() => (selectedSeriesId = group.seriesId)}
+                        aria-label={`Open series ${group.name}`}
                       >
                         <div
                           class="preset-tonal-surface relative aspect-[2/3] overflow-hidden rounded-lg shadow-md transition-shadow duration-300 group-hover:shadow-xl"
                         >
-                          {#if covers[book.seriesId]}
+                          {#if covers[group.seriesId]}
                             <img
                               class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
-                              src={covers[book.seriesId]}
+                              src={covers[group.seriesId]}
                               loading="lazy"
                               decoding="async"
                               alt=""
                             />
                           {/if}
-                          {#if book.remoteAvailable === false && book.downloadPath}
+                          <span
+                            class="badge preset-filled-surface-900-100 absolute bottom-2 right-2 text-xs font-semibold shadow-md opacity-90"
+                          >
+                            {group.books.length} {group.books.length === 1 ? 'vol' : 'vols'}
+                          </span>
+                          {#if group.downloadedCount === group.books.length}
                             <span
-                              class="badge-icon preset-filled-warning-500 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
-                              title="Saved offline; no longer available on Kavita"
-                              aria-label="Saved offline; no longer available on Kavita"
+                              class="badge-icon preset-filled-primary-600-400 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
+                              title="All volumes downloaded"
+                              aria-label="All volumes downloaded"
                             >
                               <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
                                 <path
                                   fill="currentColor"
-                                  d="M12 2 1 21h22L12 2Zm0 4.2L19.5 19h-15L12 6.2ZM11 10v4h2v-4h-2Zm0 5v2h2v-2h-2Z"
+                                  d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4Z"
                                 />
                               </svg>
                             </span>
+                          {:else if group.downloadedCount > 0}
+                            <span
+                              class="badge preset-tonal-secondary absolute left-2 top-2 text-xs font-semibold shadow-md"
+                              title={`${group.downloadedCount} of ${group.books.length} downloaded`}
+                            >
+                              {group.downloadedCount}/{group.books.length}
+                            </span>
                           {/if}
-                          {#if downloadingBookId === book.id}
+                          {#if downloadingSeriesId === group.seriesId || group.isDownloading}
                             <span
                               class="badge-icon preset-filled-primary-600-400 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
                               title="Downloading"
-                              aria-label="Downloading"
                             >
                               <svg
                                 aria-hidden="true"
@@ -1650,26 +1993,126 @@
                               </svg>
                             </span>
                           {/if}
-                          {#if progressOf(book) > 0}
+                          {#if group.totalPages > 0 && group.totalPagesRead > 0}
+                            {@const seriesProgress = Math.min(
+                              100,
+                              (group.totalPagesRead / group.totalPages) * 100,
+                            )}
                             <div
-                              class="absolute inset-x-0 bottom-0 h-2"
+                              class="absolute inset-x-0 bottom-0 h-1.5"
                               role="progressbar"
-                              aria-label={`Reading progress for ${book.title}`}
-                              aria-valuemin="0"
-                              aria-valuemax="100"
-                              aria-valuenow={Math.round(progressOf(book))}
-                              aria-valuetext={`${Math.round(progressOf(book))}% complete`}
+                              aria-label={`Reading progress for ${group.name}`}
+                              aria-valuenow={Math.round(seriesProgress)}
                             >
                               <div
                                 class="h-full preset-filled-primary-600-400"
-                                style:width={`${progressOf(book)}%`}
+                                style:width={`${seriesProgress}%`}
                               ></div>
                             </div>
                           {/if}
                         </div>
                       </button>
+                    </div>
+                    <button
+                      class="mt-3 block w-full text-left"
+                      type="button"
+                      onclick={() => (selectedSeriesId = group.seriesId)}
+                    >
+                      <h2 class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50">
+                        {group.name}
+                      </h2>
+                      <p class="mt-1 truncate text-sm text-surface-700-300">
+                        {group.author ?? 'Unknown author'}
+                      </p>
+                    </button>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          {:else}
+            {@const rowEnd = Math.min(visibleBooks.length, rowStart + gridColumns)}
+            <div
+              class="absolute inset-x-0 grid gap-x-4"
+              style={`height: ${rowHeight}px; top: ${rowIndex * rowHeight}px; grid-template-columns: repeat(${gridColumns}, minmax(0, 1fr));`}
+            >
+              {#each visibleBooks.slice(rowStart, rowEnd) as book (book.id)}
+                <article
+                  class="relative text-left"
+                  data-book-id={book.id}
+                  oncontextmenu={(event) => {
+                    event.preventDefault();
+                    openMenu(book);
+                  }}
+                >
+                  {#if viewMode === 'list'}
+                    <div class="relative">
                       <button
-                        class="btn btn-sm preset-tonal-tertiary absolute right-3 bottom-3 z-10 h-11 w-11 !p-0 shadow-md"
+                        class="group block w-full text-left"
+                        type="button"
+                        onclick={() => void open(book)}
+                        disabled={downloadingBookId === book.id}
+                      >
+                        <div
+                          class="preset-tonal-surface relative flex min-h-24 items-center gap-4 rounded-lg p-3 pr-16 text-left shadow-md transition-shadow duration-300 group-hover:shadow-xl"
+                        >
+                          <div class="relative h-20 w-14 shrink-0 overflow-hidden rounded-md">
+                            {#if covers[book.seriesId]}
+                              <img
+                                class="h-full w-full object-cover"
+                                src={covers[book.seriesId]}
+                                loading="lazy"
+                                decoding="async"
+                                alt=""
+                              />
+                            {/if}
+                            {#if book.remoteAvailable === false && book.downloadPath}
+                              <span
+                                class="badge-icon preset-filled-warning-500 absolute left-1 top-1 h-6 w-6 p-0"
+                                title="Saved offline; no longer available on Kavita"
+                                aria-label="Saved offline; no longer available on Kavita"
+                              >
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                                  <path
+                                    fill="currentColor"
+                                    d="M12 2 1 21h22L12 2Zm0 4.2L19.5 19h-15L12 6.2ZM11 10v4h2v-4h-2Zm0 5v2h2v-2h-2Z"
+                                  />
+                                </svg>
+                              </span>
+                            {/if}
+                          </div>
+                          <div class="min-w-0 flex-1">
+                            <h2
+                              class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50"
+                            >
+                              {book.title}
+                            </h2>
+                            <p class="mt-1 truncate text-sm text-surface-700-300">
+                              {book.author ?? 'Unknown author'}
+                            </p>
+                            {#if book.series}
+                              <p class="mt-1 truncate text-xs text-surface-700-300">{book.series}</p>
+                            {/if}
+                            {#if progressOf(book) > 0}
+                              <div
+                                class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-300-700"
+                                role="progressbar"
+                                aria-label={`Reading progress for ${book.title}`}
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow={Math.round(progressOf(book))}
+                                aria-valuetext={`${Math.round(progressOf(book))}% complete`}
+                              >
+                                <div
+                                  class="h-full preset-filled-primary-600-400"
+                                  style:width={`${progressOf(book)}%`}
+                                ></div>
+                              </div>
+                            {/if}
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        class="btn btn-sm preset-tonal-tertiary absolute right-3 top-3 z-10 h-11 w-11 !p-0 shadow-md"
                         type="button"
                         onclick={() => openMenu(book)}
                         aria-label={`Book actions for ${book.title}`}
@@ -1683,26 +2126,114 @@
                         </svg>
                       </button>
                     </div>
-                    <button
-                      class="mt-3 block w-full text-left"
-                      type="button"
-                      onclick={() => void open(book)}
-                      disabled={downloadingBookId === book.id}
-                    >
-                      <h2
-                        class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50"
+                  {:else}
+                    <div class="group block w-full text-left">
+                      <div class="relative">
+                        <button
+                          class="block w-full text-left"
+                          type="button"
+                          onclick={() => void open(book)}
+                          aria-label={`Open ${book.title}`}
+                          disabled={downloadingBookId === book.id}
+                        >
+                          <div
+                            class="preset-tonal-surface relative aspect-[2/3] overflow-hidden rounded-lg shadow-md transition-shadow duration-300 group-hover:shadow-xl"
+                          >
+                            {#if covers[book.seriesId]}
+                              <img
+                                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                                src={covers[book.seriesId]}
+                                loading="lazy"
+                                decoding="async"
+                                alt=""
+                              />
+                            {/if}
+                            {#if book.remoteAvailable === false && book.downloadPath}
+                              <span
+                                class="badge-icon preset-filled-warning-500 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
+                                title="Saved offline; no longer available on Kavita"
+                                aria-label="Saved offline; no longer available on Kavita"
+                              >
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                                  <path
+                                    fill="currentColor"
+                                    d="M12 2 1 21h22L12 2Zm0 4.2L19.5 19h-15L12 6.2ZM11 10v4h2v-4h-2Zm0 5v2h2v-2h-2Z"
+                                  />
+                                </svg>
+                              </span>
+                            {/if}
+                            {#if downloadingBookId === book.id}
+                              <span
+                                class="badge-icon preset-filled-primary-600-400 absolute left-2 top-2 h-7 w-7 p-0 shadow-md"
+                                title="Downloading"
+                                aria-label="Downloading"
+                              >
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 24 24"
+                                  class="h-4 w-4 animate-spin"
+                                >
+                                  <path
+                                    fill="currentColor"
+                                    d="M12 4V2a10 10 0 0 0-7.07 17.07l1.42-1.42A8 8 0 1 1 12 4Z"
+                                  />
+                                </svg>
+                              </span>
+                            {/if}
+                            {#if progressOf(book) > 0}
+                              <div
+                                class="absolute inset-x-0 bottom-0 h-2"
+                                role="progressbar"
+                                aria-label={`Reading progress for ${book.title}`}
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow={Math.round(progressOf(book))}
+                                aria-valuetext={`${Math.round(progressOf(book))}% complete`}
+                              >
+                                <div
+                                  class="h-full preset-filled-primary-600-400"
+                                  style:width={`${progressOf(book)}%`}
+                                ></div>
+                              </div>
+                            {/if}
+                          </div>
+                        </button>
+                        <button
+                          class="btn btn-sm preset-tonal-tertiary absolute right-3 bottom-3 z-10 h-11 w-11 !p-0 shadow-md"
+                          type="button"
+                          onclick={() => openMenu(book)}
+                          aria-label={`Book actions for ${book.title}`}
+                          title="More actions"
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4">
+                            <path
+                              fill="currentColor"
+                              d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <button
+                        class="mt-3 block w-full text-left"
+                        type="button"
+                        onclick={() => void open(book)}
+                        disabled={downloadingBookId === book.id}
                       >
-                        {book.title}
-                      </h2>
-                      <p class="mt-1 truncate text-sm text-surface-700-300">
-                        {book.author ?? 'Unknown author'}
-                      </p>
-                    </button>
-                  </div>
-                {/if}
-              </article>
-            {/each}
-          </div>
+                        <h2
+                          class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50"
+                        >
+                          {book.title}
+                        </h2>
+                        <p class="mt-1 truncate text-sm text-surface-700-300">
+                          {book.author ?? 'Unknown author'}
+                        </p>
+                      </button>
+                    </div>
+                  {/if}
+                </article>
+              {/each}
+            </div>
+          {/if}
         {/each}
       </section>
     {/if}

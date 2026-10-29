@@ -1,0 +1,93 @@
+/*
+ * Pure #000000 AMOLED Theme for OLED Displays.
+ * Designed to completely turn off OLED subpixels on mobile screens.
+ */
+[data-theme='amoled'] {
+  --spacing: 0.25rem;
+  --text-scaling: 1.067;
+  --typo-base--color-light: #111111;
+  --typo-base--color-dark: #f0f0f0;
+  --typo-base--font-family: 'Avenir Next', Avenir, 'Segoe UI', system-ui, sans-serif;
+  --typo-base--font-size: inherit;
+  --typo-base--line-height: inherit;
+  --typo-base--font-weight: normal;
+  --typo-base--font-style: normal;
+  --typo-base--letter-spacing: 0em;
+  --typo-heading--color-light: inherit;
+  --typo-heading--color-dark: inherit;
+  --typo-heading--font-family: inherit;
+  --typo-heading--font-weight: bold;
+  --typo-heading--font-style: normal;
+  --typo-heading--letter-spacing: inherit;
+  --typo-anchor--color-light: #2563eb;
+  --typo-anchor--color-dark: #60a5fa;
+  --typo-anchor--font-family: inherit;
+  --typo-anchor--font-size: inherit;
+  --typo-anchor--line-height: inherit;
+  --typo-anchor--font-weight: inherit;
+  --typo-anchor--font-style: inherit;
+  --typo-anchor--letter-spacing: inherit;
+  --typo-anchor--text-decoration-line: underline;
+  --typo-anchor--hover--text-decoration-line: none;
+  --typo-anchor--active--text-decoration-line: none;
+  --typo-anchor--focus--text-decoration-line: none;
+  --color-root-bg-light: #ffffff;
+  --color-root-bg-dark: #000000;
+  --radius-base: 0.375rem;
+  --radius-container: 0.5rem;
+  --default-border-width: 1px;
+  --default-divide-width: 1px;
+  --default-ring-width: 1px;
+
+  /* Primary Accent Colors */
+  --color-primary-50: oklch(0.97 0.02 250);
+  --color-primary-100: oklch(0.92 0.05 250);
+  --color-primary-200: oklch(0.85 0.09 250);
+  --color-primary-300: oklch(0.75 0.14 250);
+  --color-primary-400: oklch(0.65 0.19 250);
+  --color-primary-500: oklch(0.55 0.22 250);
+  --color-primary-600: oklch(0.48 0.22 250);
+  --color-primary-700: oklch(0.40 0.19 250);
+  --color-primary-800: oklch(0.32 0.15 250);
+  --color-primary-900: oklch(0.24 0.10 250);
+  --color-primary-950: oklch(0.16 0.06 250);
+  --color-primary-contrast-dark: #000000;
+  --color-primary-contrast-light: #ffffff;
+  --color-primary-contrast-50: var(--color-primary-contrast-dark);
+  --color-primary-contrast-100: var(--color-primary-contrast-dark);
+  --color-primary-contrast-200: var(--color-primary-contrast-dark);
+  --color-primary-contrast-300: var(--color-primary-contrast-dark);
+  --color-primary-contrast-400: var(--color-primary-contrast-dark);
+  --color-primary-contrast-500: var(--color-primary-contrast-light);
+  --color-primary-contrast-600: var(--color-primary-contrast-light);
+  --color-primary-contrast-700: var(--color-primary-contrast-light);
+  --color-primary-contrast-800: var(--color-primary-contrast-light);
+  --color-primary-contrast-900: var(--color-primary-contrast-light);
+  --color-primary-contrast-950: var(--color-primary-contrast-light);
+
+  /* Surface Colors: Pure Pitch Black at 950 and deep near-black shades */
+  --color-surface-50: #ffffff;
+  --color-surface-100: #f5f5f5;
+  --color-surface-200: #e5e5e5;
+  --color-surface-300: #d4d4d4;
+  --color-surface-400: #a3a3a3;
+  --color-surface-500: #737373;
+  --color-surface-600: #525252;
+  --color-surface-700: #262626;
+  --color-surface-800: #141414;
+  --color-surface-900: #0a0a0a;
+  --color-surface-950: #000000;
+  --color-surface-contrast-dark: #000000;
+  --color-surface-contrast-light: #ffffff;
+  --color-surface-contrast-50: var(--color-surface-contrast-dark);
+  --color-surface-contrast-100: var(--color-surface-contrast-dark);
+  --color-surface-contrast-200: var(--color-surface-contrast-dark);
+  --color-surface-contrast-300: var(--color-surface-contrast-dark);
+  --color-surface-contrast-400: var(--color-surface-contrast-light);
+  --color-surface-contrast-500: var(--color-surface-contrast-light);
+  --color-surface-contrast-600: var(--color-surface-contrast-light);
+  --color-surface-contrast-700: var(--color-surface-contrast-light);
+  --color-surface-contrast-800: var(--color-surface-contrast-light);
+  --color-surface-contrast-900: var(--color-surface-contrast-light);
+  --color-surface-contrast-950: var(--color-surface-contrast-light);
+}

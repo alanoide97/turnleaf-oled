@@ -1,4 +1,4 @@
-export type ReadingMode = 'light' | 'dark';
+export type ReadingMode = 'light' | 'dark' | 'amoled';
 
 export interface Appearance {
   mode: ReadingMode;
@@ -13,6 +13,7 @@ export interface Appearance {
   hyphenation: boolean;
   progressBar: boolean;
   keepAwake: boolean;
+  customCss?: string;
 }
 
 export const defaultAppearance: Appearance = {
@@ -28,6 +29,7 @@ export const defaultAppearance: Appearance = {
   hyphenation: false,
   progressBar: true,
   keepAwake: false,
+  customCss: '',
 };
 
 export function serializeAppearance(value: Appearance): string {
@@ -36,7 +38,8 @@ export function serializeAppearance(value: Appearance): string {
 
 export function parseAppearance(value: string): Appearance {
   const parsed = JSON.parse(value) as Partial<Appearance>;
-  const mode = parsed.mode === 'dark' ? 'dark' : 'light';
+  const mode: ReadingMode =
+    parsed.mode === 'amoled' ? 'amoled' : parsed.mode === 'dark' ? 'dark' : 'light';
   return {
     ...defaultAppearance,
     ...parsed,
@@ -51,5 +54,6 @@ export function parseAppearance(value: string): Appearance {
       Math.max(0, Number(parsed.bottomMargin ?? defaultAppearance.bottomMargin)),
     ),
     progressBar: parsed.progressBar !== false,
+    customCss: typeof parsed.customCss === 'string' ? parsed.customCss : '',
   };
 }

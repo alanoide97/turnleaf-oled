@@ -1,10 +1,43 @@
-# Turnleaf
+# Turnleaf (Enhanced Fork)
+
+This is an enhanced fork of [Turnleaf (`sgerner/turnleaf`)](https://github.com/sgerner/turnleaf) tracking the upstream master branch with specialized enhancements for OLED/AMOLED displays, advanced reader customization, series hierarchy, and batch offline synchronization.
 
 Turnleaf is an offline-first, mobile EPUB reader for Kavita. It is a local app only: there is no companion server, no proxy, and no hidden backend.
 
 The goal is simple: connect to Kavita, download books, read them as paginated pages, and keep progress synchronized across devices without making reading feel like a web app.
 
-Latest release: [GitHub Releases](https://github.com/sgerner/turnleaf/releases/latest)
+---
+
+### ✨ Fork Features & Enhancements
+
+- 🖤 **Pure `#000000` AMOLED True Black Mode**:
+  - Pure `#000000` pitch black reading mode (`OLED`) for EPUBs, eliminating backlight bleed and maximizing battery savings on OLED/AMOLED screens.
+  - Dedicated AMOLED theme for the app shell, library headers, dialogs, and reader controls.
+  - Ambient mesh glow and orbs are cleanly suppressed in AMOLED mode for true black contrast.
+
+- 🎨 **Dynamic Custom CSS Engine**:
+  - Live custom CSS editor directly inside Reader Settings.
+  - Injects custom CSS rules into EPUB.js iframe rendering documents in real time.
+  - Persistent styling preserved in user preferences.
+
+- 📚 **Series &rarr; Volumes Hierarchy**:
+  - Two-level library navigation: browse by **Series** (default), **Grid**, or **List**.
+  - Series cards display volume counts, cover art, author, overall reading progress, and offline status badges.
+  - Natural numeric sorting (`Vol 1`, `Vol 2`, `Vol 10` sort chronologically).
+  - Series Detail view with volume catalog, status badges, and single-tap reader launch.
+
+- ⬇️ **"Download Entire Series" One-Tap Sync**:
+  - Dedicated batch download button to save every volume of a series offline in a single tap.
+  - Sequential download pipeline with progress indicators (`Downloading 3/13...`).
+  - One-tap removal of all offline volumes in a series to reclaim storage.
+
+- 🚀 **Automated GitHub Actions Android Builds**:
+  - CI workflow configured to automatically build and package installable Android APKs on push or workflow dispatch.
+  - Generates signed release APKs when keystore secrets are present, or unsigned debug APKs for quick installation.
+
+---
+
+Latest upstream release: [GitHub Releases](https://github.com/sgerner/turnleaf/releases/latest)
 
 Tracked release notes: [RELEASE_NOTES.md](RELEASE_NOTES.md)
 

@@ -368,6 +368,14 @@
     z-index: 1;
   }
 
+  :global([data-theme='amoled'][data-mode='dark']) .app-ambient {
+    display: none !important;
+  }
+
+  :global([data-theme='amoled'][data-mode='dark']) .app-shell {
+    background: #000000 !important;
+  }
+
   :global([data-mode='dark']) .orb {
     opacity: 0.84;
   }

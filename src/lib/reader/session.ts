@@ -118,6 +118,12 @@ const MODE_COLORS = {
     link: '--color-primary-300',
     selection: '--color-primary-800',
   },
+  amoled: {
+    background: '#000000',
+    text: '#f0f0f0',
+    link: '#60a5fa',
+    selection: '#1e3a8a',
+  },
 } as const;
 
 type EpubReferenceKind = 'link' | 'resource' | 'stylesheet';
@@ -347,7 +353,8 @@ export class ReaderSession {
   private selectionListeners: Array<() => void> = [];
   private current: Location | null = null;
   private userNavigationPending = false;
-  private onLocation: ((location: ReaderLocation, origin: ReaderLocationOrigin) => void) | null =
+    private customCss = '';
+private onLocation: ((location: ReaderLocation, origin: ReaderLocationOrigin) => void) | null =
     null;
 
   constructor(private readonly bookUrl: string) {
@@ -528,7 +535,8 @@ export class ReaderSession {
 
   applyAppearance(value: Appearance): void {
     if (!this.rendition) return;
-    const colors = MODE_COLORS[value.mode];
+    this.customCss = value.customCss ?? '';
+    const colors = MODE_COLORS[value.mode] ?? MODE_COLORS.dark;
     const family =
       value.fontFamily === 'book'
         ? 'Iowan Old Style, Georgia, serif'
@@ -564,6 +572,7 @@ export class ReaderSession {
       '::selection': { background: `${this.resolveToken(colors.selection)} !important` },
     });
     this.rendition.themes.select('turnleaf');
+    this.injectCustomCssIntoContents();
   }
 
   destroy(): void {
@@ -580,8 +589,36 @@ export class ReaderSession {
     this.book.destroy();
   }
 
-  private harden(contents: Contents): Promise<void> {
-    return sanitizeEpubDocument(contents.document);
+  private async harden(contents: Contents): Promise<void> {
+    await sanitizeEpubDocument(contents.document);
+    this.injectCustomCss(contents.document);
+  }
+
+  private injectCustomCss(doc: Document | undefined): void {
+    if (!doc || !this.customCss) return;
+    try {
+      let style = doc.getElementById('turnleaf-user-custom-css');
+      if (!style) {
+        style = doc.createElement('style');
+        style.id = 'turnleaf-user-custom-css';
+        doc.head?.appendChild(style);
+      }
+      style.textContent = this.customCss;
+    } catch {
+      // Ignored
+    }
+  }
+
+  private injectCustomCssIntoContents(): void {
+    if (!this.rendition) return;
+    try {
+      const contentsList = (this.rendition as unknown as { getContents?: () => Array<{ document?: Document }> }).getContents?.() ?? [];
+      for (const c of contentsList) {
+        this.injectCustomCss(c.document);
+      }
+    } catch {
+      // Ignored
+    }
   }
 
   private cfiToXPath(cfi: string, spineIndex: number): string | null {

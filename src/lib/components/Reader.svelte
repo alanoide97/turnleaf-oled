@@ -904,14 +904,14 @@
             </svg>
           </button>
           <h2 id="reader-appearance-title" class="font-serif text-xl">Reading appearance</h2>
-          <div class="mt-4 grid grid-cols-2 gap-2" aria-label="Reading color mode">
-            {#each ['light', 'dark'] as mode (mode)}
+          <div class="mt-4 grid grid-cols-3 gap-2" aria-label="Reading color mode">
+            {#each ['light', 'dark', 'amoled'] as mode (mode)}
               <button
                 class:active-mode={appearance.mode === mode}
-                class="btn preset-outlined-surface-300-700 capitalize"
+                class="btn preset-outlined-surface-300-700 text-xs sm:text-sm capitalize"
                 type="button"
                 aria-pressed={appearance.mode === mode}
-                onclick={() => updateAppearance({ mode: mode as ReadingMode })}>{mode}</button
+                onclick={() => updateAppearance({ mode: mode as ReadingMode })}>{mode === 'amoled' ? 'OLED' : mode}</button
               >
             {/each}
           </div>
@@ -1033,6 +1033,16 @@
               onchange={(event) => updateAppearance({ keepAwake: event.currentTarget.checked })}
             />
             Keep screen on while reading
+          </label>
+          <label class="label mt-4 block">
+            <span class="label-text text-xs uppercase tracking-wider text-surface-700-300">Custom Reader CSS</span>
+            <textarea
+              class="textarea mt-1 w-full text-xs font-mono rounded-md p-2 border border-surface-300-700 bg-surface-50-950 text-surface-950-50"
+              rows="3"
+              placeholder="e.g. p &#123; text-indent: 1.5em; &#125;"
+              value={appearance.customCss ?? ''}
+              oninput={(event) => updateAppearance({ customCss: event.currentTarget.value })}
+            ></textarea>
           </label>
         </div>
       {/if}
@@ -1501,6 +1511,15 @@
     --reader-overlay-top: color-mix(in oklab, var(--reader-text) 38%, transparent);
     --reader-overlay-bottom: color-mix(in oklab, var(--reader-text) 32%, transparent);
     --reader-bar-text: var(--color-surface-50);
+  }
+
+  .reader-shell[data-mode='amoled'] {
+    --reader-background: #000000;
+    --reader-text: #f0f0f0;
+    --reader-overlay-top: transparent;
+    --reader-overlay-bottom: transparent;
+    --reader-bar-text: #ffffff;
+    background: #000000 !important;
   }
 
   .reader-overlay {
