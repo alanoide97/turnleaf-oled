@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: simplify fork description and feature summary
 - feat: add AMOLED true black theme, custom CSS engine, series hierarchy, and batch download
 - fix(deps): update DOMPurify to clear the release audit
 - fix: tolerate incomplete Kavita metadata while preserving saved books and per-book progress, and provide field-level diagnostics that can be copied or exported from Settings (#134).
