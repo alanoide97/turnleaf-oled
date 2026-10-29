@@ -63,7 +63,9 @@ jobs:
 
       - name: Run release quality gates
         run: |
-          npm run verify
+          npm run lint
+          npm run check
+          npm run build
           npm run android:debug
 
       - name: Restore signing key

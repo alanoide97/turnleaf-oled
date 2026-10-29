@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix(ci): fix svelte reactivity lint error and streamline release gates
 - docs: simplify fork description and feature summary
 - feat: add AMOLED true black theme, custom CSS engine, series hierarchy, and batch download
 - fix(deps): update DOMPurify to clear the release audit

@@ -3,7 +3,7 @@
   import { Capacitor } from '@capacitor/core';
   import { Network } from '@capacitor/network';
   import { tick, onDestroy, onMount } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { fade, fly } from 'svelte/transition';
   import {
     getBooks,
@@ -185,7 +185,7 @@
   });
 
   let seriesGroups = $derived.by(() => {
-    const map = new Map<number, BookRecord[]>();
+    const map = new SvelteMap<number, BookRecord[]>();
     for (const book of visibleBooks) {
       const list = map.get(book.seriesId) ?? [];
       list.push(book);
@@ -236,7 +236,7 @@
   let selectedSeriesId = $state<number | null>(null);
   let activeSeries = $derived(
     selectedSeriesId !== null
-      ? seriesGroups.find((g) => g.seriesId === selectedSeriesId) ?? null
+      ? (seriesGroups.find((g) => g.seriesId === selectedSeriesId) ?? null)
       : null,
   );
   let downloadingSeriesId = $state<number | null>(null);
@@ -476,7 +476,8 @@
   });
 
   $effect(() => {
-    if (viewMode === 'grid' || viewMode === 'list' || viewMode === 'series') scheduleVirtualWindow();
+    if (viewMode === 'grid' || viewMode === 'list' || viewMode === 'series')
+      scheduleVirtualWindow();
   });
 
   $effect(() => {
@@ -1673,7 +1674,9 @@
 
             <!-- Info & Actions -->
             <div class="flex flex-col flex-1 min-w-0">
-              <h1 class="font-serif text-2xl sm:text-3xl font-bold text-surface-950-50 leading-tight">
+              <h1
+                class="font-serif text-2xl sm:text-3xl font-bold text-surface-950-50 leading-tight"
+              >
                 {activeSeries.name}
               </h1>
               {#if activeSeries.author}
@@ -1684,7 +1687,8 @@
 
               <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-surface-700-300">
                 <span class="badge preset-tonal-surface">
-                  {activeSeries.books.length} {activeSeries.books.length === 1 ? 'Volume' : 'Volumes'}
+                  {activeSeries.books.length}
+                  {activeSeries.books.length === 1 ? 'Volume' : 'Volumes'}
                 </span>
                 <span
                   class="badge {activeSeries.downloadedCount === activeSeries.books.length
@@ -1704,7 +1708,9 @@
                 <div class="mt-4 max-w-md">
                   <div class="flex justify-between text-xs text-surface-700-300 mb-1">
                     <span>Series Progress</span>
-                    <span>{pct}% ({activeSeries.totalPagesRead} / {activeSeries.totalPages} pages)</span>
+                    <span
+                      >{pct}% ({activeSeries.totalPagesRead} / {activeSeries.totalPages} pages)</span
+                    >
                   </div>
                   <div class="h-2 w-full overflow-hidden rounded-full bg-surface-300-700">
                     <div class="h-full preset-filled-primary-600-400" style:width={`${pct}%`}></div>
@@ -1752,7 +1758,8 @@
                         <path fill="currentColor" d="M12 16l4-4h-3V4h-2v8H8l4 4zm9 4H3v-2h18v2z" />
                       </svg>
                       <span>
-                        Download Entire Series ({activeSeries.books.length - activeSeries.downloadedCount} remaining)
+                        Download Entire Series ({activeSeries.books.length -
+                          activeSeries.downloadedCount} remaining)
                       </span>
                     {/if}
                   </button>
@@ -1953,7 +1960,8 @@
                           <span
                             class="badge preset-filled-surface-900-100 absolute bottom-2 right-2 text-xs font-semibold shadow-md opacity-90"
                           >
-                            {group.books.length} {group.books.length === 1 ? 'vol' : 'vols'}
+                            {group.books.length}
+                            {group.books.length === 1 ? 'vol' : 'vols'}
                           </span>
                           {#if group.downloadedCount === group.books.length}
                             <span
@@ -2018,7 +2026,9 @@
                       type="button"
                       onclick={() => (selectedSeriesId = group.seriesId)}
                     >
-                      <h2 class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50">
+                      <h2
+                        class="line-clamp-2 font-serif text-base leading-snug text-surface-950-50"
+                      >
                         {group.name}
                       </h2>
                       <p class="mt-1 truncate text-sm text-surface-700-300">
@@ -2090,7 +2100,9 @@
                               {book.author ?? 'Unknown author'}
                             </p>
                             {#if book.series}
-                              <p class="mt-1 truncate text-xs text-surface-700-300">{book.series}</p>
+                              <p class="mt-1 truncate text-xs text-surface-700-300">
+                                {book.series}
+                              </p>
                             {/if}
                             {#if progressOf(book) > 0}
                               <div

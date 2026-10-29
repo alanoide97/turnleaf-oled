@@ -353,8 +353,8 @@ export class ReaderSession {
   private selectionListeners: Array<() => void> = [];
   private current: Location | null = null;
   private userNavigationPending = false;
-    private customCss = '';
-private onLocation: ((location: ReaderLocation, origin: ReaderLocationOrigin) => void) | null =
+  private customCss = '';
+  private onLocation: ((location: ReaderLocation, origin: ReaderLocationOrigin) => void) | null =
     null;
 
   constructor(private readonly bookUrl: string) {
@@ -612,7 +612,10 @@ private onLocation: ((location: ReaderLocation, origin: ReaderLocationOrigin) =>
   private injectCustomCssIntoContents(): void {
     if (!this.rendition) return;
     try {
-      const contentsList = (this.rendition as unknown as { getContents?: () => Array<{ document?: Document }> }).getContents?.() ?? [];
+      const contentsList =
+        (
+          this.rendition as unknown as { getContents?: () => Array<{ document?: Document }> }
+        ).getContents?.() ?? [];
       for (const c of contentsList) {
         this.injectCustomCss(c.document);
       }

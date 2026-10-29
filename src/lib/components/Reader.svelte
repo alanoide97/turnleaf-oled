@@ -911,7 +911,8 @@
                 class="btn preset-outlined-surface-300-700 text-xs sm:text-sm capitalize"
                 type="button"
                 aria-pressed={appearance.mode === mode}
-                onclick={() => updateAppearance({ mode: mode as ReadingMode })}>{mode === 'amoled' ? 'OLED' : mode}</button
+                onclick={() => updateAppearance({ mode: mode as ReadingMode })}
+                >{mode === 'amoled' ? 'OLED' : mode}</button
               >
             {/each}
           </div>
@@ -1035,7 +1036,9 @@
             Keep screen on while reading
           </label>
           <label class="label mt-4 block">
-            <span class="label-text text-xs uppercase tracking-wider text-surface-700-300">Custom Reader CSS</span>
+            <span class="label-text text-xs uppercase tracking-wider text-surface-700-300"
+              >Custom Reader CSS</span
+            >
             <textarea
               class="textarea mt-1 w-full text-xs font-mono rounded-md p-2 border border-surface-300-700 bg-surface-50-950 text-surface-950-50"
               rows="3"
