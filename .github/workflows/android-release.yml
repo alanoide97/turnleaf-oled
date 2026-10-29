@@ -76,18 +76,13 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          set -eu
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
-            base64 --decode <<<"$ANDROID_KEYSTORE_BASE64" > android/turnleaf-release.jks
-            cat > android/keystore.properties <<EOF
-            TURNLEAF_STORE_FILE=turnleaf-release.jks
-            TURNLEAF_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD
-            TURNLEAF_KEY_ALIAS=$ANDROID_KEY_ALIAS
-            TURNLEAF_KEY_PASSWORD=$ANDROID_KEY_PASSWORD
-            EOF
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/turnleaf-release.jks
+            printf "TURNLEAF_STORE_FILE=turnleaf-release.jks\nTURNLEAF_STORE_PASSWORD=%s\nTURNLEAF_KEY_ALIAS=%s\nTURNLEAF_KEY_PASSWORD=%s\n" \
+              "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" > android/keystore.properties
             echo "has_keystore=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Signing secrets not configured; continuing with debug build"
+            echo "Signing secrets not configured; using debug build"
             echo "has_keystore=false" >> "$GITHUB_OUTPUT"
           fi
 
