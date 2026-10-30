@@ -4,11 +4,11 @@ import { compareVersions, fetchLatestGithubRelease } from './releases';
 const trustedAsset = {
   name: 'app-release.apk',
   browser_download_url:
-    'https://github.com/sgerner/turnleaf/releases/download/v0.3.3%2B4/app-release.apk',
+    'https://github.com/alanoide97/turnleaf-oled/releases/download/v0.3.3%2B4/app-release.apk',
 };
 
 const trustedRelease = {
-  html_url: 'https://github.com/sgerner/turnleaf/releases/tag/v0.3.3%2B4',
+  html_url: 'https://github.com/alanoide97/turnleaf-oled/releases/tag/v0.3.3%2B4',
   name: 'Turnleaf 0.3.3',
   tag_name: 'v0.3.3+4',
   published_at: '2026-09-08T00:00:00Z',
@@ -67,7 +67,7 @@ describe('fetchLatestGithubRelease', () => {
 
   it.each([
     'javascript:alert(1)',
-    'http://github.com/sgerner/turnleaf/releases/tag/v0.3.3%2B4',
+    'http://github.com/alanoide97/turnleaf-oled/releases/tag/v0.3.3%2B4',
     'https://evil.example/releases/tag/v0.3.3%2B4',
     'https://github.com/another/repository/releases/tag/v0.3.3%2B4',
   ])('omits a banner when the release URL is unsafe or foreign: %s', async (htmlUrl) => {
@@ -78,9 +78,9 @@ describe('fetchLatestGithubRelease', () => {
 
   it.each([
     'javascript:alert(1)',
-    'http://github.com/sgerner/turnleaf/releases/download/v0.3.3%2B4/app-release.apk',
+    'http://github.com/alanoide97/turnleaf-oled/releases/download/v0.3.3%2B4/app-release.apk',
     'https://evil.example/releases/download/v0.3.3%2B4/app-release.apk',
-    'https://github.com/sgerner/other/releases/download/v0.3.3%2B4/app-release.apk',
+    'https://github.com/alanoide97/other/releases/download/v0.3.3%2B4/app-release.apk',
   ])('omits an unsafe or foreign APK URL: %s', async (browserDownloadUrl) => {
     mockRelease({
       ...trustedRelease,
@@ -100,7 +100,7 @@ describe('fetchLatestGithubRelease', () => {
         {
           name: '../app-release.apk',
           browser_download_url:
-            'https://github.com/sgerner/turnleaf/releases/download/v0.3.3%2B4/../app-release.apk',
+            'https://github.com/alanoide97/turnleaf-oled/releases/download/v0.3.3%2B4/../app-release.apk',
         },
       ],
     });

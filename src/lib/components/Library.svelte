@@ -2688,6 +2688,53 @@
           ).toFixed(1)} MB
         </dd>
       </div>
+      <div class="mt-7" aria-labelledby="library-settings-about-title">
+        <h3 id="library-settings-about-title" class="text-lg font-medium">About</h3>
+        <p class="mt-1 text-sm text-surface-700-300">
+          Turnleaf is an offline-first mobile EPUB reader for Kavita. This fork adds an OLED true
+          black mode, live custom CSS injection, series grouping with dedicated volume catalogs, and
+          one-tap batch downloads.
+        </p>
+        <dl class="mt-3 space-y-2 text-sm">
+          <div class="flex items-center justify-between gap-3">
+            <dt class="text-surface-700-300">App version</dt>
+            <dd class="tabular-nums font-mono text-xs">{__APP_VERSION__}</dd>
+          </div>
+          {#if server.kavitaVersion}
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-surface-700-300">Kavita version</dt>
+              <dd class="tabular-nums font-mono text-xs">{server.kavitaVersion}</dd>
+            </div>
+          {/if}
+          <div class="flex items-center justify-between gap-3">
+            <dt class="text-surface-700-300">Repository</dt>
+            <dd class="truncate text-right">
+              <a
+                class="anchor text-primary-500-700 hover:underline"
+                href="https://github.com/alanoide97/turnleaf-oled"
+                target="_blank"
+                rel="noreferrer"
+              >
+                alanoide97/turnleaf-oled
+              </a>
+            </dd>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <dt class="text-surface-700-300">Upstream base</dt>
+            <dd class="truncate text-right">
+              <a
+                class="anchor text-surface-600-400 hover:underline"
+                href="https://github.com/sgerner/turnleaf"
+                target="_blank"
+                rel="noreferrer"
+              >
+                sgerner/turnleaf
+              </a>
+            </dd>
+          </div>
+        </dl>
+      </div>
+
       {#if confirmDeleteServer}
         <div class="mt-7 rounded-xl border border-error-500/35 p-4" transition:fade>
           <p class="text-sm font-medium text-error-700-300">Delete this server?</p>

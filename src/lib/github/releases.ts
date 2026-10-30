@@ -21,8 +21,8 @@ export type ReleaseBanner = {
   title: string | null;
 };
 
-const githubReleasesUrl = 'https://api.github.com/repos/sgerner/turnleaf/releases/latest';
-const githubRepositoryPath = '/sgerner/turnleaf';
+const githubReleasesUrl = 'https://api.github.com/repos/alanoide97/turnleaf-oled/releases/latest';
+const githubRepositoryPath = '/alanoide97/turnleaf-oled';
 
 type ParsedVersion = {
   major: number;

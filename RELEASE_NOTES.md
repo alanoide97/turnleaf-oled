@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- feat: check updates from fork repository and add in-app About section
 - ci: fix heredoc indentation and base64 decoding in signing key step
 - fix(ci): fix svelte reactivity lint error and streamline release gates
 - docs: simplify fork description and feature summary
